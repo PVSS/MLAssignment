@@ -1,0 +1,71 @@
+---
+title: "Practical ML Assignment"
+author: "Sathya Prakash"
+date: "Sunday, May 24, 2015"
+output: html_document
+---
+Given Training Data is read using the using read.csv. It was observed that some of values are stored as NA string.
+
+```{r}
+setwd("D:\\R")
+training<-read.csv("pml-training.csv",na.strings="")
+training[training=="NA"]=NA
+onlyNAs<-sapply(training,function(x) sum(is.na(x))>19000)
+trainingDataClean<-training[!onlyNAs]
+trainingDataClean<-trainingDataClean[sapply(trainingDataClean,function(x) is.numeric(x))]
+trainingDataClean$classe<-training$classe
+
+trainingDataClean<-subset(trainingDataClean,select=-c(X,raw_timestamp_part_1,raw_timestamp_part_2,num_window))
+dim(trainingDataClean)
+```
+
+DO the same processing on the Test data as well
+
+```{r}
+testing<-read.csv("pml-testing.csv",na.strings="")
+testing[testing=="NA"]=NA
+testingDataClean<-testing[!onlyNAs]
+testingDataClean<-testingDataClean[sapply(testingDataClean,function(x) is.numeric(x))]
+
+testingDataClean<-subset(testingDataClean,select=-c(X,raw_timestamp_part_1,raw_timestamp_part_2,num_window))
+dim(testingDataClean)
+```
+Observed that there are no covariates with near zero variance. With near Zero Variance such co variates will not be helpful in prediction.
+
+```{r}
+library(caret)
+zeroVar = nearZeroVar(trainingDataClean,saveMetrics=TRUE)
+any(zeroVar$nzv)
+
+```
+
+Split the Training Data into Training and Validation using CreateDataPartition
+```{r}
+inTrain<-createDataPartition(y=trainingDataClean$classe,p=0.7,list=FALSE)
+t<-trainingDataClean[inTrain,]
+v<-trainingDataClean[-inTrain,]
+corr<-cor(t[,1:52])
+library(corrplot)
+corrplot(corr, order = "FPC", method = "color", type = "lower", tl.cex = 0.5, 
+         tl.col = rgb(0, 0, 0))
+
+```
+
+Training Using Random Forests with cross validation of 5 times
+```{r}
+model<-train(t$classe~.,data=t,method="rf",trControl=trainControl(method="cv",5),ntree=251)
+model
+```
+Out of Sample error is determined using the validation data selected earlier
+```{r}
+p<-predict(model,v)
+acc<-postResample(p,v$classe)
+acc
+confusionMatrix(v$classe,p)
+```
+
+The Prediction on the test Data is obtained by applying the model
+```{r}
+p<-predict(model,testingDataClean)
+p
+```
